@@ -1,2 +1,2 @@
-# qwatcher, yet another service registration and discovery solution
+# qwatch, yet another service registration and discovery solution
 
