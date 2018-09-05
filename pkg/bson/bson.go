@@ -1,23 +1,19 @@
-package gob
+package bson
 
 import (
-	"bytes"
-	"encoding/gob"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ToBytes converts anything to bytes
 func ToBytes(anything interface{}) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(anything)
+	data, err := bson.Marshal(anything)
 	if err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	return data, nil
 }
 
 // FromBytes decodes bytes to struct
 func FromBytes(data []byte, p interface{}) error {
-	dec := gob.NewDecoder(bytes.NewBuffer(data))
-	return dec.Decode(p)
+	return bson.Unmarshal(data, p)
 }

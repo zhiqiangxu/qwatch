@@ -1,6 +1,8 @@
 package kvdb
 
 import (
+	"io"
+
 	"github.com/boltdb/bolt"
 )
 
@@ -67,6 +69,29 @@ func (kvdb *KVDB) SetWithBucket(bucket, key, value []byte) error {
 	return tx.Commit()
 }
 
+// SetFunc is used for atomic set ops
+func (kvdb *KVDB) SetFunc(key []byte, f func([]byte) []byte) error {
+	return kvdb.SetFuncWithBucket(defaultBucket, key, f)
+}
+
+// SetFuncWithBucket is used for atomic set ops
+func (kvdb *KVDB) SetFuncWithBucket(bucket, key []byte, f func([]byte) []byte) error {
+	tx, err := kvdb.conn.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	b := tx.Bucket(defaultBucket)
+	val := b.Get(key)
+	nval := f(val)
+	if err := b.Put(key, nval); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 // Get for key
 func (kvdb *KVDB) Get(key []byte) ([]byte, error) {
 
@@ -91,6 +116,18 @@ func (kvdb *KVDB) GetWithBucket(bucket, key []byte) ([]byte, error) {
 	copyValue := make([]byte, len(val))
 	copy(copyValue, val)
 	return copyValue, nil
+}
+
+// Snapshot will write to writer in read mode
+func (kvdb *KVDB) Snapshot(writer io.Writer) error {
+	tx, err := kvdb.conn.Begin(false)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.WriteTo(writer)
+	return err
 }
 
 // Close closes the kvdb
