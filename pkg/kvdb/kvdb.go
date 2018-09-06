@@ -74,7 +74,7 @@ func (kvdb *KVDB) SetFunc(key []byte, f func([]byte) []byte) error {
 	return kvdb.SetFuncWithBucket(defaultBucket, key, f)
 }
 
-// SetFuncWithBucket is used for atomic set ops
+// SetFuncWithBucket is used for atomic set/hash ops
 func (kvdb *KVDB) SetFuncWithBucket(bucket, key []byte, f func([]byte) []byte) error {
 	tx, err := kvdb.conn.Begin(true)
 	if err != nil {
@@ -85,8 +85,15 @@ func (kvdb *KVDB) SetFuncWithBucket(bucket, key []byte, f func([]byte) []byte) e
 	b := tx.Bucket(defaultBucket)
 	val := b.Get(key)
 	nval := f(val)
-	if err := b.Put(key, nval); err != nil {
-		return err
+	if nval == nil {
+		// delete the key if nil value
+		if err = b.Delete(key); err != nil {
+			return err
+		}
+	} else {
+		if err = b.Put(key, nval); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()
