@@ -21,6 +21,11 @@ type SetAPIAddrCmd struct {
 	store *store.Store
 }
 
+// NewSetAPIAddrCmd returns a SetAPIAddrCmd
+func NewSetAPIAddrCmd(store *store.Store) *SetAPIAddrCmd {
+	return &SetAPIAddrCmd{store: store}
+}
+
 // ServeQRPC implements qrpc.Handler
 func (cmd *SetAPIAddrCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
 	var setAPIAddrCmd client.SetAPIAddrCmd

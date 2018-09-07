@@ -16,6 +16,11 @@ type JoinCmd struct {
 	store *store.Store
 }
 
+// NewJoinCmd returns a JoinCmd
+func NewJoinCmd(store *store.Store) *JoinCmd {
+	return &JoinCmd{store: store}
+}
+
 var (
 	// ErrLeaderNA when leader not available
 	ErrLeaderNA = errors.New("leader not available")

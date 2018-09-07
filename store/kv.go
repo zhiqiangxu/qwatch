@@ -3,8 +3,7 @@ package store
 import (
 	"io"
 	"sync"
-
-	"reflect"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
@@ -12,76 +11,90 @@ import (
 
 // KV is bundled with rkv
 type KV struct {
-	meta sync.Map
-	data sync.Map
+	mu   sync.RWMutex
+	meta map[string]string          // nodeID -> apiAddr
+	data map[string]*AliveEndPoints // service:networkID -> *AliveEndPoints
 }
 
-// EndPoint for each node
+// NewKV constructs a KV
+func NewKV() *KV {
+	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints)}
+}
+
+// AliveEndPoints contains alive endpoints for service:networkID
+type AliveEndPoints struct {
+	mu           sync.Mutex
+	endpointInfo map[EndPoint]*TTL
+}
+
+// Add an entry
+func (a *AliveEndPoints) Add(endpoint EndPoint, ttl TTL) {
+	a.mu.Lock()
+	if a.endpointInfo == nil {
+		a.endpointInfo = make(map[EndPoint]*TTL)
+	}
+	a.endpointInfo[endpoint] = &ttl
+	a.mu.Unlock()
+}
+
+// Delete an entry
+func (a *AliveEndPoints) Delete(endpoint EndPoint, nodeID string) {
+	a.mu.Lock()
+
+	if a.endpointInfo != nil {
+		ttl, ok := a.endpointInfo[endpoint]
+		if ok {
+			if ttl.NodeID == nodeID {
+				delete(a.endpointInfo, endpoint)
+			}
+		}
+	}
+
+	a.mu.Unlock()
+}
+
+// EndPoints returns all EndPoints
+func (a *AliveEndPoints) EndPoints() []EndPoint {
+	var ret []EndPoint
+
+	return ret
+}
+
+// EndPointTTLs returns all EndPointTTLs
+func (a *AliveEndPoints) EndPointTTLs() []EndPointTTL {
+	var ret []EndPointTTL
+
+	return ret
+}
+
+// TTL contains heartbeat info for endpoint
+type TTL struct {
+	NodeID     string
+	LastUpdate time.Time
+}
+
+// NetworkEndPointTTL contains both NetworkEndPoint and TTL
+type NetworkEndPointTTL struct {
+	TTL             TTL
+	NetworkEndPoint NetworkEndPoint
+}
+
+// NetworkEndPoint includes NetworkID
+type NetworkEndPoint struct {
+	NetworkID string
+	EndPoint  EndPoint
+}
+
+// EndPointTTL is for resp
+type EndPointTTL struct {
+	TTL      TTL
+	EndPoint EndPoint
+}
+
+// EndPoint for IP:Port
 type EndPoint struct {
-	IP   string
+	Addr string
 	Port uint16
-}
-
-// Node contains all EndPoint
-type Node struct {
-	M map[string]EndPoint
-}
-
-// Clone returns a copy
-func (s *Node) Clone() Node {
-
-	m := make(map[string]EndPoint)
-	for k, v := range s.M {
-		m[k] = v
-	}
-	return Node{M: m}
-}
-
-// NodeSet for all nodes of service
-type NodeSet struct {
-	L     sync.RWMutex
-	Nodes []Node
-}
-
-// Add the node to set
-func (s *NodeSet) Add(node Node) {
-	s.L.Lock()
-	defer s.L.Unlock()
-
-	for _, n := range s.Nodes {
-		if reflect.DeepEqual(n, node) {
-			return
-		}
-	}
-
-	s.Nodes = append(s.Nodes, node.Clone())
-}
-
-// Remove a node from set
-func (s *NodeSet) Remove(node Node) {
-	s.L.Lock()
-	defer s.L.Unlock()
-
-	for i, n := range s.Nodes {
-		if reflect.DeepEqual(n, node) {
-			s.Nodes[len(s.Nodes)-1], s.Nodes[i] = s.Nodes[i], s.Nodes[len(s.Nodes)-1]
-			s.Nodes = s.Nodes[:len(s.Nodes)-1]
-			return
-		}
-	}
-}
-
-// Members returns all nodes in set
-func (s *NodeSet) Members() []Node {
-
-	s.L.RLock()
-	defer s.L.RUnlock()
-
-	var nodes []Node
-	for _, n := range s.Nodes {
-		nodes = append(nodes, n)
-	}
-	return nodes
 }
 
 // data ops
@@ -89,17 +102,23 @@ func (s *NodeSet) Members() []Node {
 // SAdd will decode bytes then sadd
 func (kv *KV) SAdd(key, value []byte) error {
 
-	var nodes []Node
-	err := bson.SliceFromBytes(value, &nodes)
+	var networkEndPointTTLs []NetworkEndPointTTL
+	err := bson.SliceFromBytes(value, &networkEndPointTTLs)
 	if err != nil {
 		return err
 	}
 
-	val, _ := kv.data.LoadOrStore(string(key), NodeSet{})
-	nodeset := val.(*NodeSet)
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	for _, networkEndPointTTL := range networkEndPointTTLs {
+		key := KeyForServiceNetwork(string(key), networkEndPointTTL.NetworkEndPoint.NetworkID)
+		val, ok := kv.data[key]
+		if !ok {
+			val = &AliveEndPoints{}
+			kv.data[key] = val
+		}
 
-	for _, node := range nodes {
-		nodeset.Add(node)
+		val.Add(networkEndPointTTL.NetworkEndPoint.EndPoint, networkEndPointTTL.TTL)
 	}
 
 	return nil
@@ -107,17 +126,29 @@ func (kv *KV) SAdd(key, value []byte) error {
 
 // SRem will decode bytes then srem
 func (kv *KV) SRem(key, value []byte) error {
-	var nodes []Node
-	err := bson.SliceFromBytes(value, &nodes)
+	var networkEndPointTTLs []NetworkEndPointTTL
+	err := bson.SliceFromBytes(value, &networkEndPointTTLs)
 	if err != nil {
 		return err
 	}
 
-	val, _ := kv.data.LoadOrStore(string(key), NodeSet{})
-	nodeset := val.(*NodeSet)
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	for _, networkEndPointTTL := range networkEndPointTTLs {
+		key := KeyForServiceNetwork(string(key), networkEndPointTTL.NetworkEndPoint.NetworkID)
+		val, ok := kv.data[key]
+		if !ok {
+			continue
+		}
 
-	for _, node := range nodes {
-		nodeset.Remove(node)
+		val.mu.Lock()
+		ttl, ok := val.endpointInfo[networkEndPointTTL.NetworkEndPoint.EndPoint]
+		if ok {
+			if ttl.NodeID == networkEndPointTTL.TTL.NodeID {
+				delete(val.endpointInfo, networkEndPointTTL.NetworkEndPoint.EndPoint)
+			}
+		}
+		val.mu.Unlock()
 	}
 
 	return nil
@@ -127,7 +158,9 @@ func (kv *KV) SRem(key, value []byte) error {
 
 // SetAPIAddr will store api addr
 func (kv *KV) SetAPIAddr(key, value []byte) error {
-	kv.meta.Store(string(key), string(value))
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	kv.meta[string(key)] = string(value)
 	return nil
 }
 

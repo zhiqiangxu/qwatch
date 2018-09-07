@@ -13,6 +13,10 @@ import (
 	"github.com/zhiqiangxu/qwatch/server"
 )
 
+const (
+	ttl = time.Second * 60
+)
+
 // Store provide read/write kv ops
 type Store struct {
 	localAPIAddr string
@@ -23,7 +27,7 @@ type Store struct {
 // New returns a store
 func New(config rkv.Config, localAPIAddr string) (*Store, error) {
 
-	kv := &KV{}
+	kv := NewKV()
 	rkv, err := rkv.New(kv, config)
 	if err != nil {
 		return nil, err
@@ -33,22 +37,26 @@ func New(config rkv.Config, localAPIAddr string) (*Store, error) {
 
 // mutation ops
 
-// SAdd add nodes to set
-func (s *Store) SAdd(key []byte, val []Node) error {
-	var nodes []interface{}
-	for _, node := range val {
-		nodes = append(nodes, node)
+// SAdd add endpoints to service
+func (s *Store) SAdd(key []byte, val []NetworkEndPoint) error {
+	ttl := TTL{NodeID: s.rkv.Config.LocalID, LastUpdate: time.Now()}
+	var entries []interface{}
+	for _, networkEndPoint := range val {
+		entry := NetworkEndPointTTL{NetworkEndPoint: networkEndPoint, TTL: ttl}
+		entries = append(entries, entry)
 	}
-	return s.rkv.SAdd(key, nodes...)
+	return s.rkv.SAdd(key, entries...)
 }
 
 // SRem remove nodes from set
-func (s *Store) SRem(key []byte, val []Node) error {
-	var nodes []interface{}
-	for _, node := range val {
-		nodes = append(nodes, node)
+func (s *Store) SRem(key []byte, val []NetworkEndPoint) error {
+	ttl := TTL{NodeID: s.rkv.Config.LocalID, LastUpdate: time.Time{}}
+	var entries []interface{}
+	for _, networkEndPoint := range val {
+		entry := NetworkEndPointTTL{NetworkEndPoint: networkEndPoint, TTL: ttl}
+		entries = append(entries, entry)
 	}
-	return s.rkv.SRem(key, nodes...)
+	return s.rkv.SRem(key, entries...)
 }
 
 // SetAPIAddr set apiAddr for node
@@ -58,9 +66,9 @@ func (s *Store) SetAPIAddr(nodeID []byte, apiAddr []byte) error {
 
 // read ops
 
-// GetNodes returns nodes for specified service
-func (s *Store) GetNodes(service string) []Node {
-	return s.kv.GetNodes(service)
+// GetEndPoints returns nodes for specified service
+func (s *Store) GetEndPoints(service, networkID string) []EndPoint {
+	return s.kv.GetEndPoints(service, networkID)
 }
 
 // GetAPIAddr returns the apiAddr for node

@@ -15,14 +15,14 @@ import (
 	"github.com/zhiqiangxu/qrpc"
 	"github.com/zhiqiangxu/qwatch/pkg/config"
 	"github.com/zhiqiangxu/qwatch/pkg/logger"
+	"github.com/zhiqiangxu/qwatch/server"
+	"github.com/zhiqiangxu/qwatch/server/internalcmd"
 	"github.com/zhiqiangxu/qwatch/store"
 )
 
 const (
-	// DefaultPublicAddress is for public
-	DefaultPublicAddress = "localhost:8877"
-	// DefaultInternalAddress is for internal
-	DefaultInternalAddress = "localhost:8878"
+	// DefaultAPIAddress is for internal
+	DefaultAPIAddress = "localhost:8878"
 	// DefaultRaftAddress is for raft
 	DefaultRaftAddress = "localhost:8879"
 	// DataDir for data storage
@@ -43,8 +43,8 @@ func main() {
 		Args:  cobra.MaximumNArgs(2),
 		Run: func(cobraCmd *cobra.Command, args []string) {
 			// read params
-			apiAddr, raftAddr := DefaultPublicAddress, DefaultInternalAddress, DefaultRaftAddress
-			slice := []*string{&publicAddr, &internalAddr, &raftAddr}
+			apiAddr, raftAddr := DefaultAPIAddress, DefaultRaftAddress
+			slice := []*string{&apiAddr, &raftAddr}
 			for i, arg := range args {
 				*slice[i] = arg
 			}
@@ -88,10 +88,11 @@ func main() {
 			}, []string{"method", "error"})
 
 			handler := qrpc.NewServeMux()
-			internalHandler := qrpc.NewServeMux()
+			handler.Handle(server.JoinCmd, internalcmd.NewJoinCmd(store))
+			handler.Handle(server.SetAPIAddrCmd, internalcmd.NewSetAPIAddrCmd(store))
 
 			bindings := []qrpc.ServerBinding{
-				qrpc.ServerBinding{Addr: apiAddr, Handler: internalHandler, LatencyMetric: requestLatencyMetric, CounterMetric: requestCountMetric}}
+				qrpc.ServerBinding{Addr: apiAddr, Handler: handler, LatencyMetric: requestLatencyMetric, CounterMetric: requestCountMetric}}
 
 			qserver := qrpc.NewServer(bindings)
 

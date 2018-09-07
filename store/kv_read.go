@@ -1,17 +1,42 @@
 package store
 
-// GetAPIAddr returns the apiAddr for specified node
-func (kv *KV) GetAPIAddr(nodeID string) string {
-	v, _ := kv.meta.Load(nodeID)
-	s, _ := v.(string)
-	return s
+import "fmt"
+
+// KeyForServiceNetwork generate key for (service, networkID)
+func KeyForServiceNetwork(service, networkID string) string {
+	return fmt.Sprintf("%s:%s", service, networkID)
 }
 
-// GetNodes returns all nodes for service
-func (kv *KV) GetNodes(service string) []Node {
-	val, ok := kv.data.Load(service)
+// GetAPIAddr returns the apiAddr for specified node
+func (kv *KV) GetAPIAddr(nodeID string) string {
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	return kv.meta[nodeID]
+}
+
+// GetEndPoints returns all EndPoint for service:networkID
+func (kv *KV) GetEndPoints(service, networkID string) []EndPoint {
+	key := KeyForServiceNetwork(service, networkID)
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	val, ok := kv.data[key]
 	if !ok {
 		return nil
 	}
-	return val.(*NodeSet).Members()
+	return val.EndPoints()
+}
+
+// GetEndPointTTLs returns all EndPointTTL for service:networkID
+func (kv *KV) GetEndPointTTLs(service, networkID string) []EndPointTTL {
+	key := KeyForServiceNetwork(service, networkID)
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	val, ok := kv.data[key]
+	if !ok {
+		return nil
+	}
+	return val.EndPointTTLs()
 }
