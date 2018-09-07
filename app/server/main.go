@@ -55,12 +55,20 @@ func main() {
 				bootstrap = true
 			}
 			rkvConf := rkv.Config{DataDir: DataDir, LocalID: raftAddr, LocalRaftAddr: raftAddr, Bootstrap: bootstrap, Recover: recover}
-			_, err := server.NewStore(rkvConf)
+			store, err := server.NewStore(rkvConf)
 			if err != nil {
 				panic(fmt.Sprintf("NewStore fail:%v", err))
 			}
+			// do join by any node in cluster if required
 			if join != "" {
+				err = store.JoinByQrpc(join)
+				if err != nil {
+					panic(fmt.Sprintf("JoinByQrpc fail:%v", err))
+				}
 			}
+			// set apiAddr to internalAddr by request leader apiAddr
+
+			// start qrpc server after rkv is ready
 
 			// qrpc request count
 			requestCountMetric := kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{

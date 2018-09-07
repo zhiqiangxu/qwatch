@@ -10,3 +10,15 @@ type RegCmd struct {
 type LWCmd struct {
 	Services []string
 }
+
+// JoinCmd tries to add a new node to raft cluster
+type JoinCmd struct {
+	NodeID   string
+	RaftAddr string
+}
+
+// JoinResp is resp for join
+type JoinResp struct {
+	OK  bool
+	Msg string
+}
