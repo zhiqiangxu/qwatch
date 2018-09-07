@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ttl = time.Second * 60
+	ttlTimeout = time.Second * 60
 )
 
 // Store provide read/write kv ops

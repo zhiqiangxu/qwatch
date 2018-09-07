@@ -14,11 +14,12 @@ type KV struct {
 	mu   sync.RWMutex
 	meta map[string]string          // nodeID -> apiAddr
 	data map[string]*AliveEndPoints // service:networkID -> *AliveEndPoints
+	gc   *GC
 }
 
 // NewKV constructs a KV
 func NewKV() *KV {
-	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints)}
+	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints), gc: NewGC()}
 }
 
 // AliveEndPoints contains alive endpoints for service:networkID
@@ -54,17 +55,42 @@ func (a *AliveEndPoints) Delete(endpoint EndPoint, nodeID string) {
 }
 
 // EndPoints returns all EndPoints
-func (a *AliveEndPoints) EndPoints() []EndPoint {
-	var ret []EndPoint
+func (a *AliveEndPoints) EndPoints() (ret []EndPoint, shouldGC bool) {
 
-	return ret
+	now := time.Now()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.endpointInfo == nil {
+		return
+	}
+
+	for endpoint, ttl := range a.endpointInfo {
+		if ttl.LastUpdate.Add(ttlTimeout).Before(now) {
+			shouldGC = true
+		} else {
+			ret = append(ret, endpoint)
+		}
+	}
+	return
 }
 
 // EndPointTTLs returns all EndPointTTLs
-func (a *AliveEndPoints) EndPointTTLs() []EndPointTTL {
-	var ret []EndPointTTL
+func (a *AliveEndPoints) EndPointTTLs() (ret []EndPointTTL, shouldGC bool) {
+	now := time.Now()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.endpointInfo == nil {
+		return
+	}
 
-	return ret
+	for endpoint, ttl := range a.endpointInfo {
+		if ttl.LastUpdate.Add(ttlTimeout).Before(now) {
+			shouldGC = true
+		} else {
+			ret = append(ret, EndPointTTL{EndPoint: endpoint, TTL: *ttl})
+		}
+	}
+	return
 }
 
 // TTL contains heartbeat info for endpoint

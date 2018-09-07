@@ -25,7 +25,11 @@ func (kv *KV) GetEndPoints(service, networkID string) []EndPoint {
 	if !ok {
 		return nil
 	}
-	return val.EndPoints()
+	ret, shouldGC := val.EndPoints()
+	if shouldGC {
+		kv.gc.Put(GcRequest{NetworkID: networkID, Service: service})
+	}
+	return ret
 }
 
 // GetEndPointTTLs returns all EndPointTTL for service:networkID
@@ -38,5 +42,9 @@ func (kv *KV) GetEndPointTTLs(service, networkID string) []EndPointTTL {
 	if !ok {
 		return nil
 	}
-	return val.EndPointTTLs()
+	ret, shouldGC := val.EndPointTTLs()
+	if shouldGC {
+		kv.gc.Put(GcRequest{NetworkID: networkID, Service: service})
+	}
+	return ret
 }
