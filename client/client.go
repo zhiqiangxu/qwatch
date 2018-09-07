@@ -22,3 +22,15 @@ type JoinResp struct {
 	OK  bool
 	Msg string
 }
+
+// SetAPIAddrCmd set apiAddr for node
+type SetAPIAddrCmd struct {
+	NodeID  string
+	APIAddr string
+}
+
+// SetAPIAddrResp is resp for SetAPIAddrCmd
+type SetAPIAddrResp struct {
+	OK  bool
+	Msg string
+}

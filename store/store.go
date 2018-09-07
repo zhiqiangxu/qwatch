@@ -3,29 +3,32 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/zhiqiangxu/qrpc"
 	"github.com/zhiqiangxu/qwatch/client"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
+	"github.com/zhiqiangxu/qwatch/pkg/logger"
 	"github.com/zhiqiangxu/qwatch/pkg/rkv"
 	"github.com/zhiqiangxu/qwatch/server"
 )
 
 // Store provide read/write kv ops
 type Store struct {
-	kv  *KV
-	rkv *rkv.RKV
+	localAPIAddr string
+	kv           *KV
+	rkv          *rkv.RKV
 }
 
-// NewStore returns a store
-func NewStore(config rkv.Config) (*Store, error) {
+// New returns a store
+func New(config rkv.Config, localAPIAddr string) (*Store, error) {
 
 	kv := &KV{}
 	rkv, err := rkv.New(kv, config)
 	if err != nil {
 		return nil, err
 	}
-	return &Store{kv: kv, rkv: rkv}, nil
+	return &Store{localAPIAddr: localAPIAddr, kv: kv, rkv: rkv}, nil
 }
 
 // mutation ops
@@ -86,6 +89,59 @@ func (s *Store) Join(nodeID, raftAddr string) error {
 func (s *Store) JoinByQrpc(remoteAPIAddr string) error {
 
 	return JoinPeerByQrpc(remoteAPIAddr, s.rkv.Config.LocalID, s.rkv.Config.LocalRaftAddr)
+}
+
+// UpdateAPIAddr update localAPIAddr for itself
+func (s *Store) UpdateAPIAddr() {
+	for {
+		logger.Info("UpdateAPIAddr")
+		if s.rkv.IsLeader() {
+			err := s.SetAPIAddr([]byte(s.rkv.Config.LocalID), []byte(s.localAPIAddr))
+			if err == nil {
+				return
+			}
+			logger.Error("SetAPIAddr", err)
+		} else {
+			leaderAPIAddr := s.rkv.LeaderAPIAddr()
+			if leaderAPIAddr != "" {
+				err := SetAPIAddrByQrpc(leaderAPIAddr, s.rkv.Config.LocalID, s.localAPIAddr)
+				if err == nil {
+					return
+				}
+				logger.Error("SetAPIAddrByQrpc", err)
+			} else {
+				logger.Info("leader NA")
+			}
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+// SetAPIAddrByQrpc tries to set apiAddr via qrpc
+func SetAPIAddrByQrpc(remoteAPIAddr, nodeID, apiAddr string) error {
+	api := qrpc.NewAPI([]string{remoteAPIAddr}, qrpc.ConnectionConfig{}, nil)
+	defer api.Close()
+
+	payload, err := bson.ToBytes(client.SetAPIAddrCmd{NodeID: nodeID, APIAddr: apiAddr})
+	if err != nil {
+		return err
+	}
+	frame, err := api.Call(context.Background(), server.SetAPIAddrCmd, payload)
+	if err != nil {
+		return err
+	}
+
+	var resp client.SetAPIAddrResp
+	err = bson.FromBytes(frame.Payload, &resp)
+	if err != nil {
+		return err
+	}
+
+	if !resp.OK {
+		return fmt.Errorf("%s", resp.Msg)
+	}
+
+	return nil
 }
 
 // JoinPeerByQrpc tries to join other to raft cluster by qrpc

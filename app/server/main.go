@@ -15,7 +15,7 @@ import (
 	"github.com/zhiqiangxu/qrpc"
 	"github.com/zhiqiangxu/qwatch/pkg/config"
 	"github.com/zhiqiangxu/qwatch/pkg/logger"
-	"github.com/zhiqiangxu/qwatch/server"
+	"github.com/zhiqiangxu/qwatch/store"
 )
 
 const (
@@ -38,12 +38,12 @@ var (
 func main() {
 
 	var rootCmd = &cobra.Command{
-		Use:   "qwatch [public address] [internal address] [raft address]",
+		Use:   "qwatch [api address] [raft address]",
 		Short: "listen and server at specified address",
-		Args:  cobra.MaximumNArgs(3),
+		Args:  cobra.MaximumNArgs(2),
 		Run: func(cobraCmd *cobra.Command, args []string) {
 			// read params
-			publicAddr, internalAddr, raftAddr := DefaultPublicAddress, DefaultInternalAddress, DefaultRaftAddress
+			apiAddr, raftAddr := DefaultPublicAddress, DefaultInternalAddress, DefaultRaftAddress
 			slice := []*string{&publicAddr, &internalAddr, &raftAddr}
 			for i, arg := range args {
 				*slice[i] = arg
@@ -55,7 +55,7 @@ func main() {
 				bootstrap = true
 			}
 			rkvConf := rkv.Config{DataDir: DataDir, LocalID: raftAddr, LocalRaftAddr: raftAddr, Bootstrap: bootstrap, Recover: recover}
-			store, err := server.NewStore(rkvConf)
+			store, err := store.New(rkvConf, apiAddr)
 			if err != nil {
 				panic(fmt.Sprintf("NewStore fail:%v", err))
 			}
@@ -66,7 +66,9 @@ func main() {
 					panic(fmt.Sprintf("JoinByQrpc fail:%v", err))
 				}
 			}
-			// set apiAddr to internalAddr by request leader apiAddr
+			// update apiAddr for self
+			// it will keep trying until succeed, if possible
+			store.UpdateAPIAddr()
 
 			// start qrpc server after rkv is ready
 
@@ -89,8 +91,7 @@ func main() {
 			internalHandler := qrpc.NewServeMux()
 
 			bindings := []qrpc.ServerBinding{
-				qrpc.ServerBinding{Addr: publicAddr, Handler: handler, DefaultReadTimeout: 10 /*second*/, LatencyMetric: requestLatencyMetric, CounterMetric: requestCountMetric},
-				qrpc.ServerBinding{Addr: internalAddr, Handler: internalHandler, LatencyMetric: requestLatencyMetric, CounterMetric: requestCountMetric}}
+				qrpc.ServerBinding{Addr: apiAddr, Handler: internalHandler, LatencyMetric: requestLatencyMetric, CounterMetric: requestCountMetric}}
 
 			qserver := qrpc.NewServer(bindings)
 

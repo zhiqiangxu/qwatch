@@ -13,4 +13,6 @@ const (
 	JoinCmd
 	// JoinRespCmd is resp for join
 	JoinRespCmd
+	// SetAPIAddrCmd should be called to leader, it won't forward request
+	SetAPIAddrCmd
 )
