@@ -8,6 +8,12 @@
   revision = "3c58d8115a78a6879e5df75ae900846768d36895"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/beorn7/perks"
+  packages = ["quantile"]
+  revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
+
+[[projects]]
   name = "github.com/boltdb/bolt"
   packages = ["."]
   revision = "2f1ce7a837dcb8da3ec595b1dac9d0632f0f99e8"
@@ -15,9 +21,19 @@
 
 [[projects]]
   name = "github.com/go-kit/kit"
-  packages = ["metrics"]
+  packages = [
+    "metrics",
+    "metrics/internal/lv",
+    "metrics/prometheus"
+  ]
   revision = "ca4112baa34cb55091301bdc13b1420a122b1b9e"
   version = "v0.7.0"
+
+[[projects]]
+  name = "github.com/golang/protobuf"
+  packages = ["proto"]
+  revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
+  version = "v1.2.0"
 
 [[projects]]
   name = "github.com/hashicorp/go-immutable-radix"
@@ -50,16 +66,55 @@
   revision = "6e5ba93211eaf8d9a2ad7e41ffad8c6f160f9fe3"
 
 [[projects]]
+  name = "github.com/matttproud/golang_protobuf_extensions"
+  packages = ["pbutil"]
+  revision = "c12348ce28de40eed0136aa2b644d0ee0650e56c"
+  version = "v1.0.1"
+
+[[projects]]
+  name = "github.com/prometheus/client_golang"
+  packages = ["prometheus"]
+  revision = "c5b7fccd204277076155f10851dad72b76a49317"
+  version = "v0.8.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/client_model"
+  packages = ["go"]
+  revision = "5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/common"
+  packages = [
+    "expfmt",
+    "internal/bitbucket.org/ww/goautoneg",
+    "model"
+  ]
+  revision = "c7de2306084e37d54b8be01f3541a8464345e9a5"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/procfs"
+  packages = [
+    ".",
+    "internal/util",
+    "nfs",
+    "xfs"
+  ]
+  revision = "05ee40e3a273f7245e8777337fc7b46e533a9a92"
+
+[[projects]]
   branch = "master"
   name = "github.com/zhiqiangxu/qrpc"
   packages = ["."]
-  revision = "f40baf9155ddace49ba45e6a1fb0049ae5c0c8af"
+  revision = "dfb380111762837c197d1afb7426beffae41aa53"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "ebe1bf3edb3325c393447059974de898d5133eb8"
+  revision = "8cf3aee429924738c56c34bb819c4ea8273fc434"
 
 [[projects]]
   branch = "v2"
@@ -73,6 +128,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f51840e4a81de7971a90b64640a195e8cd0d9010cb09575091247fe886bbbdae"
+  inputs-digest = "85e39665e242f7db01531cedb29cc4f842d2ae909a1753843512bbe182d14b6d"
   solver-name = "gps-cdcl"
   solver-version = 1

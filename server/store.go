@@ -15,8 +15,7 @@ type Store struct {
 func NewStore(config rkv.Config) (*Store, error) {
 
 	kv := &store.KV{}
-	config.KV = kv
-	rkv, err := rkv.New(config)
+	rkv, err := rkv.New(kv, config)
 	if err != nil {
 		return nil, err
 	}
@@ -58,4 +57,16 @@ func (s *Store) GetNodes(service string) []store.Node {
 // GetAPIAddr returns the apiAddr for node
 func (s *Store) GetAPIAddr(nodeID []byte) string {
 	return s.kv.GetAPIAddr(string(nodeID))
+}
+
+// leader related
+
+// IsLeader tells if current node is leader
+func (s *Store) IsLeader() bool {
+	return s.rkv.IsLeader()
+}
+
+// LeaderAPIAddr returns the apiAddr for leader
+func (s *Store) LeaderAPIAddr() string {
+	return s.rkv.LeaderAPIAddr()
 }

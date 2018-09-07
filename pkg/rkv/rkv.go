@@ -1,7 +1,6 @@
 package rkv
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,16 +17,12 @@ const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
 
+	raftDirPerm = 0700
 	raftDir     = "raft"
 	raftSnapDir = "raft_snapshot" // snapshots in raft_snapshot/
 	raftFile    = "raft.db"       // lives in raft/raft.db
 
 	kvFile = "kv.db"
-)
-
-var (
-	// ErrNotLeader when mutate on non-leader
-	ErrNotLeader = errors.New("not leader")
 )
 
 // KV for di, all mutations should happen via raft
@@ -38,6 +33,7 @@ type KV interface {
 
 	// meta ops
 	SetAPIAddr(key, value []byte) error
+	GetAPIAddr(nodeID string) string
 
 	// raft ops
 	SnapShot() (raft.FSMSnapshot, error)
@@ -56,9 +52,9 @@ type RKV struct {
 }
 
 // New returns a RKV instance
-func New(conf Config) (*RKV, error) {
+func New(kv KV, conf Config) (*RKV, error) {
 
-	rs := &RKV{Config: conf}
+	rs := &RKV{Config: conf, kv: kv}
 
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
@@ -80,7 +76,13 @@ func New(conf Config) (*RKV, error) {
 
 	var logStore raft.LogStore
 	var stableStore raft.StableStore
-	boltDB, err := raftboltdb.NewBoltStore(filepath.Join(conf.DataDir, raftDir, raftFile))
+	// NewBoltStore won't create directory automatically, so do it here
+	boltDir := filepath.Join(conf.DataDir, raftDir)
+	os.MkdirAll(boltDir, raftDirPerm)
+	boltDB, err := raftboltdb.NewBoltStore(filepath.Join(boltDir, raftFile))
+	if err != nil {
+		return nil, err
+	}
 	logStore = boltDB
 	stableStore = boltDB
 
@@ -89,7 +91,7 @@ func New(conf Config) (*RKV, error) {
 		return nil, fmt.Errorf("new raft: %s", err)
 	}
 
-	if conf.RemoteAPIAddr == "" {
+	if conf.Bootstrap {
 		configuration := raft.Configuration{
 			Servers: []raft.Server{
 				{
@@ -106,11 +108,50 @@ func New(conf Config) (*RKV, error) {
 	return rs, nil
 }
 
+// IsLeader tells if the node is leader
+func (rkv *RKV) IsLeader() bool {
+	return rkv.raft.State() == raft.Leader
+}
+
+// LeaderAPIAddr returns the apiAddr for leader
+func (rkv *RKV) LeaderAPIAddr() string {
+	leaderRaftAddr := rkv.raft.Leader()
+	return rkv.kv.GetAPIAddr(string(leaderRaftAddr))
+}
+
+// Join joins a node, identified by nodeID and located at raftAddr, to the cluster.
+// The node must be ready to respond to Raft communications at that address.
+func (rkv *RKV) Join(nodeID, raftAddr string) error {
+
+	configFuture := rkv.raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil {
+		return err
+	}
+
+	for _, srv := range configFuture.Configuration().Servers {
+		// If a node already exists with either the joining node's ID or address,
+		// that node may need to be removed from the config first.
+		if srv.ID == raft.ServerID(nodeID) || srv.Address == raft.ServerAddress(raftAddr) {
+			// However if *both* the ID and the address are the same, then nothing -- not even
+			// a join operation -- is needed.
+			if srv.Address == raft.ServerAddress(raftAddr) && srv.ID == raft.ServerID(nodeID) {
+				return nil
+			}
+
+			future := rkv.raft.RemoveServer(srv.ID, 0, 0)
+			if err := future.Error(); err != nil {
+				return err
+			}
+		}
+	}
+
+	f := rkv.raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(raftAddr), 0, 0)
+
+	return f.Error()
+}
+
 // SAdd to rkv
 func (rkv *RKV) SAdd(key []byte, val ...interface{}) error {
-	if rkv.raft.State() != raft.Leader {
-		return ErrNotLeader
-	}
 
 	bytes, err := bson.VarToBytes(val...)
 	if err != nil {

@@ -1,0 +1,8 @@
+Env = "test"
+
+
+Servers = ["106.14.50.182:8890"]
+
+
+
+EnableDebug = true

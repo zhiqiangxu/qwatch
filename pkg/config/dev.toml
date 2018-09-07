@@ -1,0 +1,7 @@
+Env = "dev"
+
+
+Servers = ["localhost:8890"]
+
+
+EnableDebug = true
