@@ -37,6 +37,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		return f.kv.SRem(c.Key, c.Value)
 	case SetAPIAddr:
 		return f.kv.SetAPIAddr(c.Key, c.Value)
+	case Expire:
+		return f.kv.Expire(c.Value)
 	}
 
 	return ErrorInvalidOp

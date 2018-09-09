@@ -10,6 +10,8 @@ const (
 	SAdd Op = iota
 	// SRem for set remove
 	SRem
+	// Expire will expire ExpiredEndPointTTLsInKey
+	Expire
 
 	// meta ops
 

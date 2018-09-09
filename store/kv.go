@@ -7,39 +7,41 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
+	"github.com/zhiqiangxu/qwatch/pkg/entity"
 )
 
 // KV is bundled with rkv
 type KV struct {
+	store *Store
+
 	mu   sync.RWMutex
 	meta map[string]string          // nodeID -> apiAddr
 	data map[string]*AliveEndPoints // service:networkID -> *AliveEndPoints
-	gc   *GC
 }
 
 // NewKV constructs a KV
-func NewKV() *KV {
-	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints), gc: NewGC()}
+func NewKV(store *Store) *KV {
+	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints), store: store}
 }
 
 // AliveEndPoints contains alive endpoints for service:networkID
 type AliveEndPoints struct {
 	mu           sync.Mutex
-	endpointInfo map[EndPoint]*TTL
+	endpointInfo map[entity.EndPoint]*entity.TTL
 }
 
 // Add an entry
-func (a *AliveEndPoints) Add(endpoint EndPoint, ttl TTL) {
+func (a *AliveEndPoints) Add(endpoint entity.EndPoint, ttl entity.TTL) {
 	a.mu.Lock()
 	if a.endpointInfo == nil {
-		a.endpointInfo = make(map[EndPoint]*TTL)
+		a.endpointInfo = make(map[entity.EndPoint]*entity.TTL)
 	}
 	a.endpointInfo[endpoint] = &ttl
 	a.mu.Unlock()
 }
 
 // Delete an entry
-func (a *AliveEndPoints) Delete(endpoint EndPoint, nodeID string) {
+func (a *AliveEndPoints) Delete(endpoint entity.EndPoint, nodeID string) {
 	a.mu.Lock()
 
 	if a.endpointInfo != nil {
@@ -55,9 +57,9 @@ func (a *AliveEndPoints) Delete(endpoint EndPoint, nodeID string) {
 }
 
 // EndPoints returns all EndPoints
-func (a *AliveEndPoints) EndPoints() (ret []EndPoint, shouldGC bool) {
+func (a *AliveEndPoints) EndPoints() (ret []entity.EndPoint) {
 
-	now := time.Now()
+	now := bson.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.endpointInfo == nil {
@@ -65,9 +67,7 @@ func (a *AliveEndPoints) EndPoints() (ret []EndPoint, shouldGC bool) {
 	}
 
 	for endpoint, ttl := range a.endpointInfo {
-		if ttl.LastUpdate.Add(ttlTimeout).Before(now) {
-			shouldGC = true
-		} else {
+		if ttl.LastUpdate.Add(ttlTimeout).After(now) {
 			ret = append(ret, endpoint)
 		}
 	}
@@ -75,8 +75,8 @@ func (a *AliveEndPoints) EndPoints() (ret []EndPoint, shouldGC bool) {
 }
 
 // EndPointTTLs returns all EndPointTTLs
-func (a *AliveEndPoints) EndPointTTLs() (ret []EndPointTTL, shouldGC bool) {
-	now := time.Now()
+func (a *AliveEndPoints) EndPointTTLs() (ret []entity.EndPointTTL) {
+	now := bson.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.endpointInfo == nil {
@@ -84,43 +84,36 @@ func (a *AliveEndPoints) EndPointTTLs() (ret []EndPointTTL, shouldGC bool) {
 	}
 
 	for endpoint, ttl := range a.endpointInfo {
-		if ttl.LastUpdate.Add(ttlTimeout).Before(now) {
-			shouldGC = true
-		} else {
-			ret = append(ret, EndPointTTL{EndPoint: endpoint, TTL: *ttl})
+		if ttl.LastUpdate.Add(ttlTimeout).After(now) {
+			ret = append(ret, entity.EndPointTTL{EndPoint: endpoint, TTL: *ttl})
 		}
 	}
 	return
 }
 
-// TTL contains heartbeat info for endpoint
-type TTL struct {
-	NodeID     string
-	LastUpdate time.Time
+// Expire pre-filtered expiredEndPointTTLs
+func (a *AliveEndPoints) Expire(expiredEndPointTTLs []entity.EndPointTTL) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, endpointTTL := range expiredEndPointTTLs {
+		if *a.endpointInfo[endpointTTL.EndPoint] == endpointTTL.TTL {
+			delete(a.endpointInfo, endpointTTL.EndPoint)
+		}
+	}
+
 }
 
-// NetworkEndPointTTL contains both NetworkEndPoint and TTL
-type NetworkEndPointTTL struct {
-	TTL             TTL
-	NetworkEndPoint NetworkEndPoint
-}
+// ExpiredEndPointTTLs returns expred EndPointTTL
+func (a *AliveEndPoints) ExpiredEndPointTTLs(target time.Time) (ret []entity.EndPointTTL) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-// NetworkEndPoint includes NetworkID
-type NetworkEndPoint struct {
-	NetworkID string
-	EndPoint  EndPoint
-}
-
-// EndPointTTL is for resp
-type EndPointTTL struct {
-	TTL      TTL
-	EndPoint EndPoint
-}
-
-// EndPoint for IP:Port
-type EndPoint struct {
-	Addr string
-	Port uint16
+	for k, v := range a.endpointInfo {
+		if v.LastUpdate.Add(ttlTimeout).Before(target) {
+			ret = append(ret, entity.EndPointTTL{TTL: *v, EndPoint: k})
+		}
+	}
+	return nil
 }
 
 // data ops
@@ -128,7 +121,7 @@ type EndPoint struct {
 // SAdd will decode bytes then sadd
 func (kv *KV) SAdd(key, value []byte) error {
 
-	var networkEndPointTTLs []NetworkEndPointTTL
+	var networkEndPointTTLs []entity.NetworkEndPointTTL
 	err := bson.SliceFromBytes(value, &networkEndPointTTLs)
 	if err != nil {
 		return err
@@ -152,7 +145,7 @@ func (kv *KV) SAdd(key, value []byte) error {
 
 // SRem will decode bytes then srem
 func (kv *KV) SRem(key, value []byte) error {
-	var networkEndPointTTLs []NetworkEndPointTTL
+	var networkEndPointTTLs []entity.NetworkEndPointTTL
 	err := bson.SliceFromBytes(value, &networkEndPointTTLs)
 	if err != nil {
 		return err
@@ -167,14 +160,28 @@ func (kv *KV) SRem(key, value []byte) error {
 			continue
 		}
 
-		val.mu.Lock()
-		ttl, ok := val.endpointInfo[networkEndPointTTL.NetworkEndPoint.EndPoint]
-		if ok {
-			if ttl.NodeID == networkEndPointTTL.TTL.NodeID {
-				delete(val.endpointInfo, networkEndPointTTL.NetworkEndPoint.EndPoint)
-			}
+		val.Delete(networkEndPointTTL.NetworkEndPoint.EndPoint, networkEndPointTTL.TTL.NodeID)
+	}
+
+	return nil
+}
+
+// Expire will remove ExpiredEndPointTTLsInKey
+func (kv *KV) Expire(value []byte) error {
+	var expiredEndPointTTLsInKeys []entity.ExpiredEndPointTTLsInKey
+	err := bson.SliceFromBytes(value, &expiredEndPointTTLsInKeys)
+	if err != nil {
+		return err
+	}
+
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	for _, expiredEndPointTTLsInKey := range expiredEndPointTTLsInKeys {
+		aliveEndPoints, ok := kv.data[expiredEndPointTTLsInKey.Key]
+		if !ok {
+			continue
 		}
-		val.mu.Unlock()
+		aliveEndPoints.Expire(expiredEndPointTTLsInKey.EndPointTTLs)
 	}
 
 	return nil

@@ -1,19 +1,12 @@
 package internalcmd
 
 import (
-	"errors"
-
 	"github.com/zhiqiangxu/qrpc"
 	"github.com/zhiqiangxu/qwatch/client"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
 	"github.com/zhiqiangxu/qwatch/pkg/logger"
 	"github.com/zhiqiangxu/qwatch/server"
 	"github.com/zhiqiangxu/qwatch/store"
-)
-
-var (
-	// ErrNotLeader when not leader
-	ErrNotLeader = errors.New("not leader")
 )
 
 // SetAPIAddrCmd will set apiAddr for node if it's leader
@@ -36,7 +29,7 @@ func (cmd *SetAPIAddrCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.Request
 	}
 
 	if !cmd.store.IsLeader() {
-		cmd.writeResp(writer, frame, ErrNotLeader)
+		cmd.writeResp(writer, frame, server.ErrNotLeader)
 	}
 
 	err = cmd.store.SetAPIAddr([]byte(setAPIAddrCmd.NodeID), []byte(setAPIAddrCmd.APIAddr))

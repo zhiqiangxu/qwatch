@@ -1,6 +1,8 @@
 package bson
 
 import (
+	"time"
+
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -28,4 +30,9 @@ func FromBytes(data []byte, p interface{}) error {
 func SliceFromBytes(data []byte, p interface{}) error {
 	raw := bson.Raw{Kind: 4, Data: data}
 	return raw.Unmarshal(p)
+}
+
+// Now returns now in milisecond precision
+func Now() time.Time {
+	return bson.Now()
 }

@@ -35,6 +35,7 @@ type KV interface {
 	SetAPIAddr(key, value []byte) error
 	GetAPIAddr(nodeID string) string
 
+	Expire(value []byte) error
 	// raft ops
 	SnapShot() (raft.FSMSnapshot, error)
 	Restore(io.ReadCloser) error
@@ -195,6 +196,27 @@ func (rkv *RKV) SRem(key []byte, val ...interface{}) error {
 	return f.Error()
 }
 
+// Expire ExpiredEndPointTTLsInKey
+func (rkv *RKV) Expire(expired interface{}) error {
+	bytes, err := bson.ToBytes(expired)
+	if err != nil {
+		return err
+	}
+
+	c := &Command{
+		Op:    Expire,
+		Value: bytes,
+	}
+
+	cbytes, err := bson.ToBytes(c)
+	if err != nil {
+		return err
+	}
+
+	f := rkv.raft.Apply(cbytes, raftTimeout)
+	return f.Error()
+}
+
 // SetAPIAddr set apiAddr for node
 func (rkv *RKV) SetAPIAddr(key, val []byte) error {
 	c := &Command{
@@ -210,4 +232,15 @@ func (rkv *RKV) SetAPIAddr(key, val []byte) error {
 
 	f := rkv.raft.Apply(cbytes, raftTimeout)
 	return f.Error()
+}
+
+// Shutdown rkv
+func (rkv *RKV) Shutdown() error {
+	f := rkv.raft.Shutdown()
+	return f.Error()
+}
+
+// LeaderCh for notify leader change
+func (rkv *RKV) LeaderCh() <-chan bool {
+	return rkv.raft.LeaderCh()
 }

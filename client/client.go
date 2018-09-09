@@ -34,3 +34,9 @@ type SetAPIAddrResp struct {
 	OK  bool
 	Msg string
 }
+
+// NotifyLeaderGCResp is resp for NotifyLeaderGCCmd
+type NotifyLeaderGCResp struct {
+	OK  bool
+	Msg string
+}

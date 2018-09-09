@@ -1,6 +1,11 @@
 package store
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/zhiqiangxu/qwatch/pkg/bson"
+	"github.com/zhiqiangxu/qwatch/pkg/entity"
+)
 
 // KeyForServiceNetwork generate key for (service, networkID)
 func KeyForServiceNetwork(service, networkID string) string {
@@ -16,7 +21,7 @@ func (kv *KV) GetAPIAddr(nodeID string) string {
 }
 
 // GetEndPoints returns all EndPoint for service:networkID
-func (kv *KV) GetEndPoints(service, networkID string) []EndPoint {
+func (kv *KV) GetEndPoints(service, networkID string) []entity.EndPoint {
 	key := KeyForServiceNetwork(service, networkID)
 	kv.mu.RLock()
 	defer kv.mu.RUnlock()
@@ -25,15 +30,11 @@ func (kv *KV) GetEndPoints(service, networkID string) []EndPoint {
 	if !ok {
 		return nil
 	}
-	ret, shouldGC := val.EndPoints()
-	if shouldGC {
-		kv.gc.Put(GcRequest{NetworkID: networkID, Service: service})
-	}
-	return ret
+	return val.EndPoints()
 }
 
 // GetEndPointTTLs returns all EndPointTTL for service:networkID
-func (kv *KV) GetEndPointTTLs(service, networkID string) []EndPointTTL {
+func (kv *KV) GetEndPointTTLs(service, networkID string) []entity.EndPointTTL {
 	key := KeyForServiceNetwork(service, networkID)
 	kv.mu.RLock()
 	defer kv.mu.RUnlock()
@@ -42,9 +43,21 @@ func (kv *KV) GetEndPointTTLs(service, networkID string) []EndPointTTL {
 	if !ok {
 		return nil
 	}
-	ret, shouldGC := val.EndPointTTLs()
-	if shouldGC {
-		kv.gc.Put(GcRequest{NetworkID: networkID, Service: service})
+	return val.EndPointTTLs()
+}
+
+// ScanExpired scans for ExpiredEndPointTTLsInKey
+func (kv *KV) ScanExpired() (expired []entity.ExpiredEndPointTTLsInKey) {
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	now := bson.Now()
+	for k, v := range kv.data {
+		endpointTTLs := v.ExpiredEndPointTTLs(now)
+		if len(endpointTTLs) > 0 {
+			expired = append(expired, entity.ExpiredEndPointTTLsInKey{Key: k, EndPointTTLs: endpointTTLs})
+		}
 	}
-	return ret
+
+	return
 }

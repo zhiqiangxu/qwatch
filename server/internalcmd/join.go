@@ -1,8 +1,6 @@
 package internalcmd
 
 import (
-	"errors"
-
 	"github.com/zhiqiangxu/qrpc"
 	"github.com/zhiqiangxu/qwatch/client"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
@@ -20,11 +18,6 @@ type JoinCmd struct {
 func NewJoinCmd(store *store.Store) *JoinCmd {
 	return &JoinCmd{store: store}
 }
-
-var (
-	// ErrLeaderNA when leader not available
-	ErrLeaderNA = errors.New("leader not available")
-)
 
 // ServeQRPC implements qrpc.Handler
 func (cmd *JoinCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
@@ -46,7 +39,7 @@ func (cmd *JoinCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame)
 
 	leaderAPIAddr := cmd.store.LeaderAPIAddr()
 	if leaderAPIAddr == "" {
-		cmd.writeResp(writer, frame, ErrLeaderNA)
+		cmd.writeResp(writer, frame, server.ErrLeaderAPINA)
 		return
 	}
 

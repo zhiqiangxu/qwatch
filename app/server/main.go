@@ -105,10 +105,15 @@ func main() {
 			signal.Notify(quitChan, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 			<-quitChan
-			err = qserver.Shutdown()
 			logger.Info("Shutdown")
+			err = qserver.Shutdown()
 			if err != nil {
 				logger.Error("Shutdown", err)
+			}
+			logger.Info("store.Close")
+			err = store.Close()
+			if err != nil {
+				logger.Error("store.Close", err)
 			}
 		}}
 

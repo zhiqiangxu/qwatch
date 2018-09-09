@@ -2,19 +2,20 @@ package store
 
 import (
 	"context"
-	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zhiqiangxu/qrpc"
-	"github.com/zhiqiangxu/qwatch/client"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
+	"github.com/zhiqiangxu/qwatch/pkg/entity"
 	"github.com/zhiqiangxu/qwatch/pkg/logger"
 	"github.com/zhiqiangxu/qwatch/pkg/rkv"
-	"github.com/zhiqiangxu/qwatch/server"
 )
 
 const (
 	ttlTimeout = time.Second * 60
+	gcInterval = time.Minute * 2
 )
 
 // Store provide read/write kv ops
@@ -22,38 +23,47 @@ type Store struct {
 	localAPIAddr string
 	kv           *KV
 	rkv          *rkv.RKV
+	closed       int32
+	closeCh      chan struct{}
+	wg           sync.WaitGroup
 }
 
 // New returns a store
 func New(config rkv.Config, localAPIAddr string) (*Store, error) {
 
-	kv := NewKV()
+	store := &Store{localAPIAddr: localAPIAddr, closeCh: make(chan struct{})}
+	kv := NewKV(store)
+	store.kv = kv
 	rkv, err := rkv.New(kv, config)
 	if err != nil {
 		return nil, err
 	}
-	return &Store{localAPIAddr: localAPIAddr, kv: kv, rkv: rkv}, nil
+	store.rkv = rkv
+
+	qrpc.GoFunc(&store.wg, store.Expire)
+
+	return store, nil
 }
 
 // mutation ops
 
 // SAdd add endpoints to service
-func (s *Store) SAdd(key []byte, val []NetworkEndPoint) error {
-	ttl := TTL{NodeID: s.rkv.Config.LocalID, LastUpdate: time.Now()}
+func (s *Store) SAdd(key []byte, val []entity.NetworkEndPoint) error {
+	ttl := entity.TTL{NodeID: s.rkv.Config.LocalID, LastUpdate: bson.Now()}
 	var entries []interface{}
 	for _, networkEndPoint := range val {
-		entry := NetworkEndPointTTL{NetworkEndPoint: networkEndPoint, TTL: ttl}
+		entry := entity.NetworkEndPointTTL{NetworkEndPoint: networkEndPoint, TTL: ttl}
 		entries = append(entries, entry)
 	}
 	return s.rkv.SAdd(key, entries...)
 }
 
 // SRem remove nodes from set
-func (s *Store) SRem(key []byte, val []NetworkEndPoint) error {
-	ttl := TTL{NodeID: s.rkv.Config.LocalID, LastUpdate: time.Time{}}
+func (s *Store) SRem(key []byte, val []entity.NetworkEndPoint) error {
+	ttl := entity.TTL{NodeID: s.rkv.Config.LocalID, LastUpdate: time.Time{}}
 	var entries []interface{}
 	for _, networkEndPoint := range val {
-		entry := NetworkEndPointTTL{NetworkEndPoint: networkEndPoint, TTL: ttl}
+		entry := entity.NetworkEndPointTTL{NetworkEndPoint: networkEndPoint, TTL: ttl}
 		entries = append(entries, entry)
 	}
 	return s.rkv.SRem(key, entries...)
@@ -67,7 +77,7 @@ func (s *Store) SetAPIAddr(nodeID []byte, apiAddr []byte) error {
 // read ops
 
 // GetEndPoints returns nodes for specified service
-func (s *Store) GetEndPoints(service, networkID string) []EndPoint {
+func (s *Store) GetEndPoints(service, networkID string) []entity.EndPoint {
 	return s.kv.GetEndPoints(service, networkID)
 }
 
@@ -101,6 +111,7 @@ func (s *Store) JoinByQrpc(remoteAPIAddr string) error {
 
 // UpdateAPIAddr update localAPIAddr for itself
 func (s *Store) UpdateAPIAddr() {
+	defer logger.Info("UpdateAPIAddr done")
 	for {
 		logger.Info("UpdateAPIAddr")
 		if s.rkv.IsLeader() {
@@ -125,55 +136,64 @@ func (s *Store) UpdateAPIAddr() {
 	}
 }
 
-// SetAPIAddrByQrpc tries to set apiAddr via qrpc
-func SetAPIAddrByQrpc(remoteAPIAddr, nodeID, apiAddr string) error {
-	api := qrpc.NewAPI([]string{remoteAPIAddr}, qrpc.ConnectionConfig{}, nil)
-	defer api.Close()
+// Expire actively expire endpoints
+func (s *Store) Expire() {
+	var (
+		ctx        context.Context
+		cancelFunc context.CancelFunc
+	)
+	for {
+		select {
+		case leader := <-s.rkv.LeaderCh():
+			if cancelFunc != nil {
+				cancelFunc()
+				cancelFunc = nil
+			}
+			if leader {
+				ctx, cancelFunc = context.WithCancel(context.Background())
+				qrpc.GoFunc(&s.wg, func(ctx context.Context) func() {
+					return func() {
+						for {
+							select {
+							case <-ctx.Done():
+								return
+							case <-time.After(gcInterval):
+								// do gc
+								expired := s.kv.ScanExpired()
+								if len(expired) > 0 {
+									s.rkv.Expire(expired)
+								}
 
-	payload, err := bson.ToBytes(client.SetAPIAddrCmd{NodeID: nodeID, APIAddr: apiAddr})
-	if err != nil {
-		return err
-	}
-	frame, err := api.Call(context.Background(), server.SetAPIAddrCmd, payload)
-	if err != nil {
-		return err
-	}
-
-	var resp client.SetAPIAddrResp
-	err = bson.FromBytes(frame.Payload, &resp)
-	if err != nil {
-		return err
-	}
-
-	if !resp.OK {
-		return fmt.Errorf("%s", resp.Msg)
+							}
+						}
+					}
+				}(ctx))
+			}
+		case <-s.closeCh:
+			if cancelFunc != nil {
+				cancelFunc()
+				cancelFunc = nil
+			}
+			return
+		}
 	}
 
-	return nil
 }
 
-// JoinPeerByQrpc tries to join other to raft cluster by qrpc
-func JoinPeerByQrpc(remoteAPIAddr, nodeID, raftAddr string) error {
-	api := qrpc.NewAPI([]string{remoteAPIAddr}, qrpc.ConnectionConfig{}, nil)
-	defer api.Close()
-
-	payload, err := bson.ToBytes(client.JoinCmd{NodeID: nodeID, RaftAddr: raftAddr})
-	if err != nil {
-		return err
-	}
-	frame, err := api.Call(context.Background(), server.JoinCmd, payload)
-	if err != nil {
-		return err
+// Close the Store
+func (s *Store) Close() error {
+	swapped := atomic.CompareAndSwapInt32(&s.closed, 0, 1)
+	if !swapped {
+		return nil
 	}
 
-	var resp client.JoinResp
-	err = bson.FromBytes(frame.Payload, &resp)
-	if err != nil {
-		return err
-	}
+	close(s.closeCh)
+	s.wg.Wait()
 
-	if !resp.OK {
-		return fmt.Errorf("%s", resp.Msg)
+	err := s.rkv.Shutdown()
+	if err != nil {
+		logger.Error("rkv.Shutdown", err)
+		return err
 	}
 
 	return nil

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"errors"
+
 	"github.com/zhiqiangxu/qrpc"
 )
 
@@ -15,4 +17,11 @@ const (
 	JoinRespCmd
 	// SetAPIAddrCmd should be called to leader, it won't forward request
 	SetAPIAddrCmd
+)
+
+var (
+	// ErrNotLeader when not leader
+	ErrNotLeader = errors.New("not leader")
+	// ErrLeaderAPINA when leader not available
+	ErrLeaderAPINA = errors.New("leader not available")
 )
