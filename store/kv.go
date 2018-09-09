@@ -2,26 +2,26 @@ package store
 
 import (
 	"io"
+	"io/ioutil"
 	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
 	"github.com/zhiqiangxu/qwatch/pkg/entity"
+	"github.com/zhiqiangxu/qwatch/pkg/logger"
 )
 
 // KV is bundled with rkv
 type KV struct {
-	store *Store
-
 	mu   sync.RWMutex
 	meta map[string]string          // nodeID -> apiAddr
 	data map[string]*AliveEndPoints // service:networkID -> *AliveEndPoints
 }
 
 // NewKV constructs a KV
-func NewKV(store *Store) *KV {
-	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints), store: store}
+func NewKV() *KV {
+	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints)}
 }
 
 // AliveEndPoints contains alive endpoints for service:networkID
@@ -30,12 +30,14 @@ type AliveEndPoints struct {
 	endpointInfo map[entity.EndPoint]*entity.TTL
 }
 
+// NewAliveEndPoints constructs an AliveEndPoints
+func NewAliveEndPoints() *AliveEndPoints {
+	return &AliveEndPoints{endpointInfo: make(map[entity.EndPoint]*entity.TTL)}
+}
+
 // Add an entry
 func (a *AliveEndPoints) Add(endpoint entity.EndPoint, ttl entity.TTL) {
 	a.mu.Lock()
-	if a.endpointInfo == nil {
-		a.endpointInfo = make(map[entity.EndPoint]*entity.TTL)
-	}
 	a.endpointInfo[endpoint] = &ttl
 	a.mu.Unlock()
 }
@@ -44,12 +46,10 @@ func (a *AliveEndPoints) Add(endpoint entity.EndPoint, ttl entity.TTL) {
 func (a *AliveEndPoints) Delete(endpoint entity.EndPoint, nodeID string) {
 	a.mu.Lock()
 
-	if a.endpointInfo != nil {
-		ttl, ok := a.endpointInfo[endpoint]
-		if ok {
-			if ttl.NodeID == nodeID {
-				delete(a.endpointInfo, endpoint)
-			}
+	ttl, ok := a.endpointInfo[endpoint]
+	if ok {
+		if ttl.NodeID == nodeID {
+			delete(a.endpointInfo, endpoint)
 		}
 	}
 
@@ -62,9 +62,6 @@ func (a *AliveEndPoints) EndPoints() (ret []entity.EndPoint) {
 	now := bson.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.endpointInfo == nil {
-		return
-	}
 
 	for endpoint, ttl := range a.endpointInfo {
 		if ttl.LastUpdate.Add(ttlTimeout).After(now) {
@@ -79,9 +76,6 @@ func (a *AliveEndPoints) EndPointTTLs() (ret []entity.EndPointTTL) {
 	now := bson.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.endpointInfo == nil {
-		return
-	}
 
 	for endpoint, ttl := range a.endpointInfo {
 		if ttl.LastUpdate.Add(ttlTimeout).After(now) {
@@ -116,6 +110,18 @@ func (a *AliveEndPoints) ExpiredEndPointTTLs(target time.Time) (ret []entity.End
 	return nil
 }
 
+// Clone returns a copy of AliveEndPoints
+func (a *AliveEndPoints) Clone() (clone *AliveEndPoints) {
+	clone = NewAliveEndPoints()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for k, v := range a.endpointInfo {
+		clone.endpointInfo[k] = &*v
+	}
+	return
+}
+
 // data ops
 
 // SAdd will decode bytes then sadd
@@ -133,7 +139,7 @@ func (kv *KV) SAdd(key, value []byte) error {
 		key := KeyForServiceNetwork(string(key), networkEndPointTTL.NetworkEndPoint.NetworkID)
 		val, ok := kv.data[key]
 		if !ok {
-			val = &AliveEndPoints{}
+			val = NewAliveEndPoints()
 			kv.data[key] = val
 		}
 
@@ -202,10 +208,74 @@ func (kv *KV) SetAPIAddr(key, value []byte) error {
 // SnapShot will do snapshot
 func (kv *KV) SnapShot() (raft.FSMSnapshot, error) {
 
-	return nil, nil
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	meta := make(map[string]string)
+	data := make(map[string]*AliveEndPoints)
+
+	for k, v := range kv.meta {
+		meta[k] = v
+	}
+	for k, v := range kv.data {
+		data[k] = v.Clone()
+	}
+	return &kvSnapshot{meta: meta, data: data}, nil
 }
 
 // Restore will do restore
-func (kv *KV) Restore(io.ReadCloser) error {
+func (kv *KV) Restore(rc io.ReadCloser) error {
+
+	bytes, err := ioutil.ReadAll(rc)
+	if err != nil {
+		logger.Error("Restore ReadAll", err)
+		return err
+	}
+	var snapshot kvSnapshot
+	err = bson.FromBytes(bytes, &snapshot)
+	if err != nil {
+		return err
+	}
+	kv.mu.Lock()
+	kv.meta = snapshot.meta
+	kv.data = snapshot.data
+	kv.mu.Unlock()
+	snapshot.meta = nil
+	snapshot.data = nil
+
 	return nil
+}
+
+type kvSnapshot struct {
+	meta map[string]string
+	data map[string]*AliveEndPoints
+}
+
+func (kvs *kvSnapshot) Persist(sink raft.SnapshotSink) error {
+
+	err := func() error {
+		// Encode data.
+		bytes, err := bson.ToBytes(kvs)
+		if err != nil {
+			return err
+		}
+
+		// Write data to sink.
+		if _, err := sink.Write(bytes); err != nil {
+			return err
+		}
+
+		// Close the sink.
+		return sink.Close()
+	}()
+
+	if err != nil {
+		sink.Cancel()
+	}
+
+	return err
+}
+
+func (kvs *kvSnapshot) Release() {
+
 }

@@ -31,9 +31,8 @@ type Store struct {
 // New returns a store
 func New(config rkv.Config, localAPIAddr string) (*Store, error) {
 
-	store := &Store{localAPIAddr: localAPIAddr, closeCh: make(chan struct{})}
-	kv := NewKV(store)
-	store.kv = kv
+	kv := NewKV()
+	store := &Store{localAPIAddr: localAPIAddr, kv: kv, closeCh: make(chan struct{})}
 	rkv, err := rkv.New(kv, config)
 	if err != nil {
 		return nil, err
