@@ -2,8 +2,8 @@ package internalcmd
 
 import (
 	"github.com/zhiqiangxu/qrpc"
-	"github.com/zhiqiangxu/qwatch/client"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
+	"github.com/zhiqiangxu/qwatch/pkg/entity"
 	"github.com/zhiqiangxu/qwatch/pkg/logger"
 	"github.com/zhiqiangxu/qwatch/server"
 	"github.com/zhiqiangxu/qwatch/store"
@@ -21,7 +21,7 @@ func NewJoinCmd(store *store.Store) *JoinCmd {
 
 // ServeQRPC implements qrpc.Handler
 func (cmd *JoinCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
-	var joinCmd client.JoinCmd
+	var joinCmd entity.JoinCmd
 	err := bson.FromBytes(frame.Payload, &joinCmd)
 	if err != nil {
 		frame.Close()
@@ -48,7 +48,7 @@ func (cmd *JoinCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame)
 }
 
 func (cmd *JoinCmd) writeResp(writer qrpc.FrameWriter, frame *qrpc.RequestFrame, err error) {
-	var resp client.JoinResp
+	var resp entity.JoinResp
 	if err == nil {
 		resp.OK = true
 	} else {

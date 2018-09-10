@@ -2,8 +2,8 @@ package internalcmd
 
 import (
 	"github.com/zhiqiangxu/qrpc"
-	"github.com/zhiqiangxu/qwatch/client"
 	"github.com/zhiqiangxu/qwatch/pkg/bson"
+	"github.com/zhiqiangxu/qwatch/pkg/entity"
 	"github.com/zhiqiangxu/qwatch/pkg/logger"
 	"github.com/zhiqiangxu/qwatch/server"
 	"github.com/zhiqiangxu/qwatch/store"
@@ -21,7 +21,7 @@ func NewSetAPIAddrCmd(store *store.Store) *SetAPIAddrCmd {
 
 // ServeQRPC implements qrpc.Handler
 func (cmd *SetAPIAddrCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
-	var setAPIAddrCmd client.SetAPIAddrCmd
+	var setAPIAddrCmd entity.SetAPIAddrCmd
 	err := bson.FromBytes(frame.Payload, &setAPIAddrCmd)
 	if err != nil {
 		frame.Close()
@@ -37,7 +37,7 @@ func (cmd *SetAPIAddrCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.Request
 }
 
 func (cmd *SetAPIAddrCmd) writeResp(writer qrpc.FrameWriter, frame *qrpc.RequestFrame, err error) {
-	var resp client.JoinResp
+	var resp entity.SetAPIAddrResp
 	if err == nil {
 		resp.OK = true
 	} else {

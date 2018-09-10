@@ -8,6 +8,18 @@ type TTL struct {
 	LastUpdate time.Time
 }
 
+// ServiceNetwork contains (Service, NetworkID)
+type ServiceNetwork struct {
+	Service   string
+	NetworkID string
+}
+
+// ServiceNetworkEndPoints contains EndPoints per ServiceNetwork
+type ServiceNetworkEndPoints struct {
+	ServiceNetwork ServiceNetwork
+	EndPoints      []EndPoint
+}
+
 // NetworkEndPointTTL contains both NetworkEndPoint and TTL
 type NetworkEndPointTTL struct {
 	TTL             TTL
@@ -26,10 +38,10 @@ type ExpiredEndPointTTLsInKey struct {
 	EndPointTTLs []EndPointTTL
 }
 
-// EndPointTTLsInKey contains all stuff under a key
-type EndPointTTLsInKey struct {
-	Key          string
-	EndPointTTLs []EndPointTTL
+// EndPointsInKey contains all stuff under a key
+type EndPointsInKey struct {
+	Key       string
+	EndPoints []EndPoint
 }
 
 // EndPointTTL is for resp

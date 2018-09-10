@@ -1,15 +1,27 @@
-package client
+package entity
 
 // RegCmd is struct for register
 type RegCmd struct {
-	Service string
-	Addrs   []string
+	Service          []byte
+	NetworkEndPoints []NetworkEndPoint
+}
+
+// RegResp is resp for RegCmd
+type RegResp struct {
+	OK  bool
+	Msg string
 }
 
 // LWCmd is struct for list and watch
 type LWCmd struct {
-	Services []string
+	ServiceNetwork []ServiceNetwork
 }
+
+// LWResp is resp for LWCmd
+type LWResp []ServiceNetworkEndPoints
+
+// LWPushResp is pushed, once for each ServiceNetwork
+type LWPushResp ServiceNetworkEndPoints
 
 // JoinCmd tries to add a new node to raft cluster
 type JoinCmd struct {
@@ -31,12 +43,6 @@ type SetAPIAddrCmd struct {
 
 // SetAPIAddrResp is resp for SetAPIAddrCmd
 type SetAPIAddrResp struct {
-	OK  bool
-	Msg string
-}
-
-// NotifyLeaderGCResp is resp for NotifyLeaderGCCmd
-type NotifyLeaderGCResp struct {
 	OK  bool
 	Msg string
 }

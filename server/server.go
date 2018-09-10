@@ -9,8 +9,14 @@ import (
 const (
 	// RegCmd for register
 	RegCmd qrpc.Cmd = iota
+	// RegRespCmd is resp for RegCmd
+	RegRespCmd
 	// LWCmd for list and watch
 	LWCmd
+	// LWRespCmd is resp for LWCmd
+	LWRespCmd
+	// LWPushRespCmd is resp for LWCmd in push mode
+	LWPushRespCmd
 	// JoinCmd tries to add a new node to raft cluster(it will forward to leader if needed)
 	JoinCmd
 	// JoinRespCmd is resp for join

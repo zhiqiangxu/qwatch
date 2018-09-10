@@ -28,7 +28,7 @@ type Store struct {
 	wg           sync.WaitGroup
 
 	mu       sync.Mutex
-	watchers []chan []entity.EndPointTTLsInKey
+	watchers []chan []entity.EndPointsInKey
 }
 
 // New returns a store
@@ -199,12 +199,18 @@ func (s *Store) Close() error {
 		return err
 	}
 
+	// close watch channels
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ch := range s.watchers {
+		close(ch)
+	}
 	return nil
 }
 
 // Watch for key change
-func (s *Store) Watch() <-chan []entity.EndPointTTLsInKey {
-	ch := make(chan []entity.EndPointTTLsInKey)
+func (s *Store) Watch() <-chan []entity.EndPointsInKey {
+	ch := make(chan []entity.EndPointsInKey)
 	s.mu.Lock()
 	s.watchers = append(s.watchers, ch)
 	s.mu.Unlock()
@@ -213,7 +219,7 @@ func (s *Store) Watch() <-chan []entity.EndPointTTLsInKey {
 }
 
 // Unwatch for key change
-func (s *Store) Unwatch(ch <-chan []entity.EndPointTTLsInKey) {
+func (s *Store) Unwatch(ch <-chan []entity.EndPointsInKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, c := range s.watchers {
@@ -229,9 +235,9 @@ func (s *Store) fire(mutatedKeys map[string]*AliveEndPoints) {
 	defer s.mu.Unlock()
 
 	for _, c := range s.watchers {
-		var change []entity.EndPointTTLsInKey
+		var change []entity.EndPointsInKey
 		for k, v := range mutatedKeys {
-			change = append(change, entity.EndPointTTLsInKey{Key: k, EndPointTTLs: v.EndPointTTLs()})
+			change = append(change, entity.EndPointsInKey{Key: k, EndPoints: v.EndPoints()})
 		}
 		c <- change
 	}
