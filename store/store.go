@@ -26,13 +26,17 @@ type Store struct {
 	closed       int32
 	closeCh      chan struct{}
 	wg           sync.WaitGroup
+
+	mu       sync.Mutex
+	watchers []chan []entity.EndPointTTLsInKey
 }
 
 // New returns a store
 func New(config rkv.Config, localAPIAddr string) (*Store, error) {
 
-	kv := NewKV()
-	store := &Store{localAPIAddr: localAPIAddr, kv: kv, closeCh: make(chan struct{})}
+	store := &Store{localAPIAddr: localAPIAddr, closeCh: make(chan struct{})}
+	kv := NewKV(store)
+	store.kv = kv
 	rkv, err := rkv.New(kv, config)
 	if err != nil {
 		return nil, err
@@ -196,4 +200,39 @@ func (s *Store) Close() error {
 	}
 
 	return nil
+}
+
+// Watch for key change
+func (s *Store) Watch() <-chan []entity.EndPointTTLsInKey {
+	ch := make(chan []entity.EndPointTTLsInKey)
+	s.mu.Lock()
+	s.watchers = append(s.watchers, ch)
+	s.mu.Unlock()
+
+	return ch
+}
+
+// Unwatch for key change
+func (s *Store) Unwatch(ch <-chan []entity.EndPointTTLsInKey) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, c := range s.watchers {
+		if ch == c {
+			s.watchers = append(s.watchers[:i], s.watchers[i+1:]...)
+			break
+		}
+	}
+}
+
+func (s *Store) fire(mutatedKeys map[string]*AliveEndPoints) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, c := range s.watchers {
+		var change []entity.EndPointTTLsInKey
+		for k, v := range mutatedKeys {
+			change = append(change, entity.EndPointTTLsInKey{Key: k, EndPointTTLs: v.EndPointTTLs()})
+		}
+		c <- change
+	}
 }

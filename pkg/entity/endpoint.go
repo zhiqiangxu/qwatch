@@ -26,6 +26,12 @@ type ExpiredEndPointTTLsInKey struct {
 	EndPointTTLs []EndPointTTL
 }
 
+// EndPointTTLsInKey contains all stuff under a key
+type EndPointTTLsInKey struct {
+	Key          string
+	EndPointTTLs []EndPointTTL
+}
+
 // EndPointTTL is for resp
 type EndPointTTL struct {
 	TTL      TTL

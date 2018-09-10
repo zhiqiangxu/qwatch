@@ -14,14 +14,15 @@ import (
 
 // KV is bundled with rkv
 type KV struct {
-	mu   sync.RWMutex
-	meta map[string]string          // nodeID -> apiAddr
-	data map[string]*AliveEndPoints // service:networkID -> *AliveEndPoints
+	store *Store
+	mu    sync.RWMutex
+	meta  map[string]string          // nodeID -> apiAddr
+	data  map[string]*AliveEndPoints // service:networkID -> *AliveEndPoints
 }
 
 // NewKV constructs a KV
-func NewKV() *KV {
-	return &KV{meta: make(map[string]string), data: make(map[string]*AliveEndPoints)}
+func NewKV(store *Store) *KV {
+	return &KV{store: store, meta: make(map[string]string), data: make(map[string]*AliveEndPoints)}
 }
 
 // AliveEndPoints contains alive endpoints for service:networkID
@@ -133,8 +134,8 @@ func (kv *KV) SAdd(key, value []byte) error {
 		return err
 	}
 
+	mutatedKeys := make(map[string]*AliveEndPoints)
 	kv.mu.Lock()
-	defer kv.mu.Unlock()
 	for _, networkEndPointTTL := range networkEndPointTTLs {
 		key := KeyForServiceNetwork(string(key), networkEndPointTTL.NetworkEndPoint.NetworkID)
 		val, ok := kv.data[key]
@@ -144,8 +145,13 @@ func (kv *KV) SAdd(key, value []byte) error {
 		}
 
 		val.Add(networkEndPointTTL.NetworkEndPoint.EndPoint, networkEndPointTTL.TTL)
+		mutatedKeys[string(key)] = val.Clone()
 	}
+	kv.mu.Unlock()
 
+	if len(mutatedKeys) > 0 {
+		kv.store.fire(mutatedKeys)
+	}
 	return nil
 }
 
@@ -157,8 +163,8 @@ func (kv *KV) SRem(key, value []byte) error {
 		return err
 	}
 
+	mutatedKeys := make(map[string]*AliveEndPoints)
 	kv.mu.Lock()
-	defer kv.mu.Unlock()
 	for _, networkEndPointTTL := range networkEndPointTTLs {
 		key := KeyForServiceNetwork(string(key), networkEndPointTTL.NetworkEndPoint.NetworkID)
 		val, ok := kv.data[key]
@@ -167,8 +173,13 @@ func (kv *KV) SRem(key, value []byte) error {
 		}
 
 		val.Delete(networkEndPointTTL.NetworkEndPoint.EndPoint, networkEndPointTTL.TTL.NodeID)
+		mutatedKeys[string(key)] = val.Clone()
 	}
+	kv.mu.Unlock()
 
+	if len(mutatedKeys) > 0 {
+		kv.store.fire(mutatedKeys)
+	}
 	return nil
 }
 
@@ -180,16 +191,21 @@ func (kv *KV) Expire(value []byte) error {
 		return err
 	}
 
+	mutatedKeys := make(map[string]*AliveEndPoints)
 	kv.mu.Lock()
-	defer kv.mu.Unlock()
 	for _, expiredEndPointTTLsInKey := range expiredEndPointTTLsInKeys {
 		aliveEndPoints, ok := kv.data[expiredEndPointTTLsInKey.Key]
 		if !ok {
 			continue
 		}
 		aliveEndPoints.Expire(expiredEndPointTTLsInKey.EndPointTTLs)
+		mutatedKeys[expiredEndPointTTLsInKey.Key] = aliveEndPoints.Clone()
 	}
+	kv.mu.Unlock()
 
+	if len(mutatedKeys) > 0 {
+		kv.store.fire(mutatedKeys)
+	}
 	return nil
 }
 
