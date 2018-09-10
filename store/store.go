@@ -79,6 +79,19 @@ func (s *Store) SetAPIAddr(nodeID []byte, apiAddr []byte) error {
 
 // read ops
 
+// GetServerList returns current qrpc server list in raft cluster
+func (s *Store) GetServerList() (servers []entity.Server, err error) {
+	raftServers, err := s.rkv.GetServerList()
+	if err != nil {
+		return
+	}
+	for _, raftServer := range raftServers {
+		apiAddr := s.kv.GetAPIAddr(string(raftServer.ID))
+		servers = append(servers, entity.Server{RaftInfo: raftServer, APIAddr: apiAddr})
+	}
+	return
+}
+
 // GetEndPoints returns nodes for specified service
 func (s *Store) GetEndPoints(service, networkID string) []entity.EndPoint {
 	return s.kv.GetEndPoints(service, networkID)

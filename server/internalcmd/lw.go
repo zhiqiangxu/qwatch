@@ -87,7 +87,7 @@ func (cmd *LWCmd) fire(ch <-chan []entity.EndPointsInKey) {
 // ServeQRPC implements qrpc.Handler
 func (cmd *LWCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
 	var lwCmd entity.LWCmd
-	err := bson.FromBytes(frame.Payload, &lwCmd)
+	err := bson.SliceFromBytes(frame.Payload, &lwCmd)
 	if err != nil {
 		logger.Error("LWCmd FromBytes", err)
 		frame.Close()
@@ -97,7 +97,7 @@ func (cmd *LWCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
 	ci := frame.ConnectionInfo()
 
 	var resp entity.LWResp
-	for _, serviceNetwork := range lwCmd.ServiceNetwork {
+	for _, serviceNetwork := range lwCmd {
 		endpoints := cmd.store.GetEndPoints(serviceNetwork.Service, serviceNetwork.NetworkID)
 		resp = append(resp, entity.ServiceNetworkEndPoints{ServiceNetwork: serviceNetwork, EndPoints: endpoints})
 	}
@@ -116,7 +116,7 @@ func (cmd *LWCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
 	}
 
 	cmd.mu.Lock()
-	for _, serviceNetwork := range lwCmd.ServiceNetwork {
+	for _, serviceNetwork := range lwCmd {
 		key := store.KeyForServiceNetwork(serviceNetwork.Service, serviceNetwork.NetworkID)
 		ciMap := cmd.keyWatchers[key]
 		if ciMap == nil {

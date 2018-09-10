@@ -13,9 +13,7 @@ type RegResp struct {
 }
 
 // LWCmd is struct for list and watch
-type LWCmd struct {
-	ServiceNetwork []ServiceNetwork
-}
+type LWCmd []ServiceNetwork
 
 // LWResp is resp for LWCmd
 type LWResp []ServiceNetworkEndPoints

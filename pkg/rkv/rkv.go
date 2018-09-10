@@ -244,3 +244,13 @@ func (rkv *RKV) Shutdown() error {
 func (rkv *RKV) LeaderCh() <-chan bool {
 	return rkv.raft.LeaderCh()
 }
+
+// GetServerList returns current raft servers
+func (rkv *RKV) GetServerList() ([]raft.Server, error) {
+	f := rkv.raft.GetConfiguration()
+	if err := f.Error(); err != nil {
+		return nil, err
+	}
+
+	return f.Configuration().Servers, nil
+}
