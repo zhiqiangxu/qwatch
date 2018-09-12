@@ -15,6 +15,8 @@ import (
 const (
 	defaultRegInterval = time.Minute
 	defaultLWInterval  = time.Second
+	// DefaultNetworkID for default NetworkID
+	DefaultNetworkID = "qw"
 )
 
 var (

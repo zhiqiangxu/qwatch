@@ -32,7 +32,7 @@ func (cmd *RegCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) 
 	}
 
 	if cmd.store.IsLeader() {
-		err = cmd.store.SAdd(regCmd.Service, regCmd.NetworkEndPoints)
+		err = cmd.store.SAdd([]byte(regCmd.Service), regCmd.NetworkEndPoints)
 		if err != nil {
 			logger.Error("cmd.store.SAdd", err)
 		}

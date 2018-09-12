@@ -2,7 +2,7 @@ package entity
 
 // RegCmd is struct for register
 type RegCmd struct {
-	Service          []byte
+	Service          string
 	NetworkEndPoints []NetworkEndPoint
 }
 

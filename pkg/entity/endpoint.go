@@ -51,7 +51,4 @@ type EndPointTTL struct {
 }
 
 // EndPoint for IP:Port
-type EndPoint struct {
-	Addr string
-	Port uint16
-}
+type EndPoint string
