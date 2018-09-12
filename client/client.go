@@ -24,6 +24,8 @@ var (
 	ErrClosed = errors.New("Client closed")
 )
 
+type dataMap map[entity.ServiceNetwork]map[entity.EndPoint]struct{}
+
 // Client for qwatch
 type Client struct {
 	wg           sync.WaitGroup
@@ -32,8 +34,8 @@ type Client struct {
 	conn         *qrpc.Connection
 
 	mu         sync.RWMutex
-	lwInfo     map[entity.ServiceNetwork]map[entity.EndPoint]struct{}
-	pushInfo   map[entity.ServiceNetwork]map[entity.EndPoint]struct{}
+	lwInfo     dataMap
+	pushInfo   dataMap
 	pushNotify map[entity.ServiceNetwork][]func(entity.LWPushResp)
 }
 

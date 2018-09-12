@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -70,6 +73,9 @@ func main() {
 			// it will keep trying until succeed, if possible
 			store.UpdateAPIAddr()
 
+			// startHTTPServer for test
+			startHTTPServer(store)
+
 			// start qrpc server after rkv is ready
 
 			// qrpc request count
@@ -132,4 +138,22 @@ func initConfig() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to load config file: %s", env))
 	}
+}
+
+func startHTTPServer(store *store.Store) {
+	go func() {
+		srv := &http.Server{Addr: "0.0.0.0:8080"}
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			servers, _ := store.GetServerList()
+			data := store.GetAllData()
+			result := make(map[string]interface{})
+			result["servers"] = servers
+			result["data"] = data
+
+			bytes, _ := json.Marshal(result)
+			io.WriteString(w, string(bytes))
+		})
+
+		fmt.Println(srv.ListenAndServe())
+	}()
 }

@@ -92,6 +92,11 @@ func (s *Store) GetServerList() (servers []entity.Server, err error) {
 	return
 }
 
+// GetAllData returns all registered data
+func (s *Store) GetAllData() map[string][]entity.EndPointTTL {
+	return s.kv.GetAllData()
+}
+
 // GetEndPoints returns nodes for specified service
 func (s *Store) GetEndPoints(service, networkID string) []entity.EndPoint {
 	return s.kv.GetEndPoints(service, networkID)

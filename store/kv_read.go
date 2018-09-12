@@ -77,3 +77,17 @@ func (kv *KV) ScanExpired() (expired []entity.ExpiredEndPointTTLsInKey) {
 
 	return
 }
+
+// GetAllData returns all registered data
+func (kv *KV) GetAllData() (ret map[string][]entity.EndPointTTL) {
+	ret = make(map[string][]entity.EndPointTTL)
+
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	for k, v := range kv.data {
+		ret[k] = v.EndPointTTLs()
+	}
+
+	return
+}
