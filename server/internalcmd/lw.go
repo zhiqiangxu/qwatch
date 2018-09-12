@@ -15,7 +15,7 @@ import (
 type LWCmd struct {
 	mu          sync.RWMutex
 	keyWatchers map[string]map[*qrpc.ConnectionInfo]struct{}
-	watchMap    map[*qrpc.ConnectionInfo]map[string]struct{}
+	ciWatchMap  map[*qrpc.ConnectionInfo]map[string]struct{}
 	store       *store.Store
 	server      *qrpc.Server
 }
@@ -23,7 +23,7 @@ type LWCmd struct {
 // NewLWCmd returns a LWCmd
 func NewLWCmd(store *store.Store) *LWCmd {
 
-	cmd := &LWCmd{store: store, keyWatchers: make(map[string]map[*qrpc.ConnectionInfo]struct{}), watchMap: make(map[*qrpc.ConnectionInfo]map[string]struct{})}
+	cmd := &LWCmd{store: store, keyWatchers: make(map[string]map[*qrpc.ConnectionInfo]struct{}), ciWatchMap: make(map[*qrpc.ConnectionInfo]map[string]struct{})}
 
 	return cmd
 }
@@ -96,24 +96,7 @@ func (cmd *LWCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
 
 	ci := frame.ConnectionInfo()
 
-	var resp entity.LWResp
-	for _, serviceNetwork := range lwCmd {
-		endpoints := cmd.store.GetEndPoints(serviceNetwork.Service, serviceNetwork.NetworkID)
-		resp = append(resp, entity.ServiceNetworkEndPoints{ServiceNetwork: serviceNetwork, EndPoints: endpoints})
-	}
-	bytes, err := bson.ToBytes(resp)
-	if err != nil {
-		logger.Error("LWCmd ToBytes", err)
-		frame.Close()
-		return
-	}
-	writer.StartWrite(frame.RequestID, server.LWRespCmd, 0)
-	writer.WriteBytes(bytes)
-	err = writer.EndWrite()
-	if err != nil {
-		logger.Error("LWCmd EndWrite bytes", err)
-		return
-	}
+	// first watch
 
 	cmd.mu.Lock()
 	for _, serviceNetwork := range lwCmd {
@@ -125,10 +108,10 @@ func (cmd *LWCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
 		}
 		ciMap[ci] = struct{}{}
 
-		keyMap := cmd.watchMap[ci]
+		keyMap := cmd.ciWatchMap[ci]
 		if keyMap == nil {
 			keyMap = make(map[string]struct{})
-			cmd.watchMap[ci] = keyMap
+			cmd.ciWatchMap[ci] = keyMap
 		}
 		keyMap[key] = struct{}{}
 	}
@@ -137,12 +120,33 @@ func (cmd *LWCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
 	ci.NotifyWhenClose(func() {
 		cmd.mu.Lock()
 
-		keyMap := cmd.watchMap[ci]
+		keyMap := cmd.ciWatchMap[ci]
 		for k := range keyMap {
 			delete(cmd.keyWatchers[k], ci)
 		}
-		delete(cmd.watchMap, ci)
+		delete(cmd.ciWatchMap, ci)
 
 		cmd.mu.Unlock()
 	})
+
+	// second list
+	var resp entity.LWResp
+	for _, serviceNetwork := range lwCmd {
+		endpoints := cmd.store.GetEndPoints(serviceNetwork.Service, serviceNetwork.NetworkID)
+		resp = append(resp, entity.ServiceNetworkEndPoints{ServiceNetwork: serviceNetwork, EndPoints: endpoints})
+	}
+	bytes, err := bson.ToBytes(resp)
+	if err != nil {
+		logger.Error("LWCmd ToBytes", err)
+		frame.Close()
+		return
+	}
+	writer.StartWrite(frame.RequestID, server.LWRespCmd, qrpc.StreamFlag)
+	writer.WriteBytes(bytes)
+	err = writer.EndWrite()
+	if err != nil {
+		logger.Error("LWCmd EndWrite bytes", err)
+		return
+	}
+
 }
