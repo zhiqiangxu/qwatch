@@ -24,6 +24,8 @@ func NewRegCmd(store *store.Store) *RegCmd {
 
 // ServeQRPC implements qrpc.Handler
 func (cmd *RegCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
+	logger.Debug("RegCmd called")
+
 	var regCmd entity.RegCmd
 	err := bson.FromBytes(frame.Payload, &regCmd)
 	if err != nil {

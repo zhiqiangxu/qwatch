@@ -86,6 +86,8 @@ func (cmd *LWCmd) fire(ch <-chan []entity.EndPointsInKey) {
 
 // ServeQRPC implements qrpc.Handler
 func (cmd *LWCmd) ServeQRPC(writer qrpc.FrameWriter, frame *qrpc.RequestFrame) {
+	logger.Debug("LWCmd called")
+
 	var lwCmd entity.LWCmd
 	err := bson.SliceFromBytes(frame.Payload, &lwCmd)
 	if err != nil {

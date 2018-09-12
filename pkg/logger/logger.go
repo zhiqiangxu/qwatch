@@ -3,8 +3,9 @@ package logger
 import (
 	"fmt"
 	"os"
-	"qpush/pkg/config"
 	"time"
+
+	"github.com/zhiqiangxu/qwatch/pkg/config"
 
 	"github.com/zhiqiangxu/qrpc"
 )

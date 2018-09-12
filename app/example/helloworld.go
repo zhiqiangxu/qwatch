@@ -6,6 +6,7 @@ import (
 
 	"github.com/zhiqiangxu/qrpc"
 	"github.com/zhiqiangxu/qwatch/client"
+	"github.com/zhiqiangxu/qwatch/pkg/config"
 	"github.com/zhiqiangxu/qwatch/pkg/entity"
 )
 
@@ -13,7 +14,15 @@ const (
 	serviceName = "hello world"
 )
 
+func init() {
+	_, err := config.Load("dev")
+	if err != nil {
+		panic(err)
+	}
+}
+
 func main() {
+
 	servers := []string{"localhost:8878"}
 	qwatchClient := client.New(servers, qrpc.ConnectionConfig{})
 	regInfo := entity.RegCmd{

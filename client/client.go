@@ -84,24 +84,28 @@ func (c *Client) RegisterService(regCmd entity.RegCmd, f func(RegResponse)) {
 }
 
 func (c *Client) registerService(regCmd *entity.RegCmd, f func(RegResponse)) {
+	logger.Debug("registerService1")
 	bytes, err := bson.ToBytes(regCmd)
 	if err != nil {
 		f(RegResponse{Err: err})
 		return
 	}
 
+	logger.Debug("registerService2")
 	_, resp, err := c.conn.Request(server.RegCmd, 0, bytes)
 	if err != nil {
 		f(RegResponse{Err: err})
 		return
 	}
 
+	logger.Debug("registerService3")
 	frame, err := resp.GetFrame()
 	if err != nil {
 		f(RegResponse{Err: err})
 		return
 	}
 
+	logger.Debug("registerService4")
 	var regResp entity.RegResp
 	err = bson.FromBytes(frame.Payload, &regResp)
 	if err != nil {
