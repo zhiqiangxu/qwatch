@@ -23,8 +23,8 @@ func init() {
 
 func main() {
 
-	servers := []string{"localhost:8878"}
-	qwatchClient := client.New(servers, qrpc.ConnectionConfig{})
+	qwatchServers := []string{"localhost:8878"}
+	qwatchClient := client.New(qwatchServers, qrpc.ConnectionConfig{})
 	regInfo := entity.RegCmd{
 		Service: serviceName,
 		NetworkEndPoints: []entity.NetworkEndPoint{
