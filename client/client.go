@@ -187,31 +187,37 @@ func (c *Client) EndPoints(sn entity.ServiceNetwork) (ret []entity.EndPoint) {
 }
 
 func (c *Client) listWatch(lwCmd *entity.LWCmd, f func(LWResponse), fp func(entity.LWPushResp)) {
+	logger.Debug("listWatch1")
 	bytes, err := bson.ToBytes(lwCmd)
 	if err != nil {
 		f(LWResponse{Err: err})
 		return
 	}
 
+	logger.Debug("listWatch2")
 	_, resp, err := c.conn.Request(server.LWCmd, 0, bytes)
 	if err != nil {
 		f(LWResponse{Err: err})
 		return
 	}
 
+	logger.Debug("listWatch3")
 	frame, err := resp.GetFrame()
 	if err != nil {
 		f(LWResponse{Err: err})
 		return
 	}
 
+	logger.Debug("listWatch4")
 	var lwResp entity.LWResp
-	err = bson.FromBytes(frame.Payload, &lwResp)
+	err = bson.SliceFromBytes(frame.Payload, &lwResp)
 	if err != nil {
+		logger.Info("frame.Payload", string(frame.Payload))
 		f(LWResponse{Err: err})
 		return
 	}
 
+	logger.Debug("listWatch5")
 	c.handleLWResp(lwResp)
 	f(LWResponse{Data: lwResp})
 

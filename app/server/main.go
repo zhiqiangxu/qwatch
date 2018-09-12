@@ -90,6 +90,8 @@ func main() {
 			handler := qrpc.NewServeMux()
 			handler.Handle(server.JoinCmd, internalcmd.NewJoinCmd(store))
 			handler.Handle(server.SetAPIAddrCmd, internalcmd.NewSetAPIAddrCmd(store))
+			handler.Handle(server.RegCmd, internalcmd.NewRegCmd(store))
+			handler.Handle(server.LWCmd, internalcmd.NewLWCmd(store))
 
 			bindings := []qrpc.ServerBinding{
 				qrpc.ServerBinding{Addr: apiAddr, Handler: handler, LatencyMetric: requestLatencyMetric, CounterMetric: requestCountMetric}}
