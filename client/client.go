@@ -212,7 +212,7 @@ func (c *Client) listWatch(lwCmd *entity.LWCmd, f func(LWResponse), fp func(enti
 
 	logger.Debug("listWatch4")
 	var lwResp entity.LWResp
-	err = bson.SliceFromBytes(frame.Payload, &lwResp)
+	err = bson.FromBytes(frame.Payload, &lwResp)
 	if err != nil {
 		logger.Info("frame.Payload", string(frame.Payload))
 		f(LWResponse{Err: err})

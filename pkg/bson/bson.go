@@ -3,6 +3,8 @@ package bson
 import (
 	"time"
 
+	"reflect"
+
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -22,6 +24,11 @@ func VarToBytes(args ...interface{}) ([]byte, error) {
 
 // FromBytes decodes bytes to struct
 func FromBytes(data []byte, p interface{}) error {
+
+	v := reflect.ValueOf(p)
+	if v.Elem().Kind() == reflect.Slice {
+		return SliceFromBytes(data, p)
+	}
 	return bson.Unmarshal(data, p)
 }
 
