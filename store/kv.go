@@ -255,6 +255,12 @@ func (kv *KV) Restore(rc io.ReadCloser) error {
 	kv.mu.Lock()
 	kv.meta = snapshot.meta
 	kv.data = snapshot.data
+	if kv.meta == nil {
+		kv.meta = make(map[string]string)
+	}
+	if kv.data == nil {
+		kv.data = make(map[string]*AliveEndPoints)
+	}
 	kv.mu.Unlock()
 	snapshot.meta = nil
 	snapshot.data = nil

@@ -80,7 +80,8 @@ func New(kv KV, conf Config) (*RKV, error) {
 	// NewBoltStore won't create directory automatically, so do it here
 	boltDir := filepath.Join(conf.DataDir, raftDir)
 	os.MkdirAll(boltDir, raftDirPerm)
-	boltDB, err := raftboltdb.NewBoltStore(filepath.Join(boltDir, raftFile))
+
+	boltDB, err := raftboltdb.New(raftboltdb.Options{Path: filepath.Join(boltDir, raftFile), NoSync: false})
 	if err != nil {
 		return nil, err
 	}
