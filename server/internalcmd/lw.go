@@ -18,6 +18,7 @@ type LWCmd struct {
 	ciWatchMap  map[*qrpc.ConnectionInfo]map[string]struct{}
 	store       *store.Store
 	server      *qrpc.Server
+	ch          <-chan []entity.EndPointsInKey
 }
 
 // NewLWCmd returns a LWCmd
@@ -33,18 +34,29 @@ func (cmd *LWCmd) SetServer(server *qrpc.Server) {
 	cmd.server = server
 }
 
-// StartWatch start wawtch changes
+// StartWatch start watch changes
 func (cmd *LWCmd) StartWatch() {
-	ch := cmd.store.Watch()
-	go cmd.fire(ch)
+	if cmd.ch != nil {
+		panic("StartWatch called twice")
+	}
+	cmd.ch = cmd.store.Watch()
+	go cmd.fire()
 }
 
-func (cmd *LWCmd) fire(ch <-chan []entity.EndPointsInKey) {
+// StopWatch stop watch changes
+func (cmd *LWCmd) StopWatch() {
+	cmd.store.Unwatch(cmd.ch)
+}
+
+func (cmd *LWCmd) fire() {
 
 	qserver := cmd.server
 	for {
 		select {
-		case changes, ok := <-ch:
+		case changes, ok := <-cmd.ch:
+
+			// logger.Info("changes", ok, changes)
+
 			if !ok {
 				return
 			}
@@ -73,7 +85,10 @@ func (cmd *LWCmd) fire(ch <-chan []entity.EndPointsInKey) {
 					qrpc.GoFunc(&wg, func() {
 						writer.StartWrite(pushID, server.LWPushRespCmd, qrpc.PushFlag)
 						writer.WriteBytes(bytes)
-						writer.EndWrite()
+						err := writer.EndWrite()
+						if err != nil {
+							logger.Error("push failed", pushID)
+						}
 					})
 				}
 				cmd.mu.RUnlock()

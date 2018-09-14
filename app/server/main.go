@@ -97,12 +97,15 @@ func main() {
 			handler.Handle(server.JoinCmd, internalcmd.NewJoinCmd(store))
 			handler.Handle(server.SetAPIAddrCmd, internalcmd.NewSetAPIAddrCmd(store))
 			handler.Handle(server.RegCmd, internalcmd.NewRegCmd(store))
-			handler.Handle(server.LWCmd, internalcmd.NewLWCmd(store))
+			lwCmd := internalcmd.NewLWCmd(store)
+			handler.Handle(server.LWCmd, lwCmd)
 
 			bindings := []qrpc.ServerBinding{
 				qrpc.ServerBinding{Addr: apiAddr, Handler: handler, LatencyMetric: requestLatencyMetric, CounterMetric: requestCountMetric}}
 
 			qserver := qrpc.NewServer(bindings)
+			lwCmd.SetServer(qserver)
+			lwCmd.StartWatch()
 
 			var wg sync.WaitGroup
 			qrpc.GoFunc(&wg, func() {
@@ -118,6 +121,7 @@ func main() {
 			if err != nil {
 				logger.Error("Shutdown", err)
 			}
+			lwCmd.StopWatch()
 			logger.Info("store.Close")
 			err = store.Close()
 			if err != nil {

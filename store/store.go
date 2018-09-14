@@ -252,6 +252,7 @@ func (s *Store) fire(mutatedKeys map[string]*AliveEndPoints) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// logger.Info("mutatedKeys", mutatedKeys, len(s.watchers))
 	for _, c := range s.watchers {
 		var change []entity.EndPointsInKey
 		for k, v := range mutatedKeys {
